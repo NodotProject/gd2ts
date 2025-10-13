@@ -1,6 +1,12 @@
 #include "gd2ts_converter.h"
 #include <godot_cpp/core/class_db.hpp>
 #include <godot_cpp/variant/utility_functions.hpp>
+#include <godot_cpp/classes/file_access.hpp>
+#include <godot_cpp/classes/dir_access.hpp>
+
+#include "parser/gdscript_parser.h"
+#include "parser/ast_builder.h"
+#include "transformer/ast_transformer.h"
 
 using namespace godot;
 
@@ -27,15 +33,62 @@ void GD2TSConverter::_bind_methods() {
 
 Dictionary GD2TSConverter::transpile_file(const String &gd_path, const String &ts_output_path) {
     Dictionary result;
-
-    // TODO: Implement actual transpilation
-    // For now, return a placeholder result
-    result["success"] = false;
-    result["error"] = "Not yet implemented";
     result["input_path"] = gd_path;
     result["output_path"] = ts_output_path;
 
-    UtilityFunctions::print("GD2TSConverter: transpile_file called with: ", gd_path);
+    // Read the GDScript file
+    Ref<FileAccess> file = FileAccess::open(gd_path, FileAccess::READ);
+    if (file.is_null()) {
+        result["success"] = false;
+        result["error"] = "Failed to open file: " + gd_path;
+        UtilityFunctions::push_error("GD2TSConverter: Failed to open file: ", gd_path);
+        return result;
+    }
+
+    String gdscript_content = file->get_as_text();
+    file->close();
+
+    // Convert to std::string
+    std::string gd_source = std::string(gdscript_content.utf8().get_data());
+
+    // Parse the GDScript
+    gd2ts::GDScriptParser parser;
+    if (!parser.parse(gd_source)) {
+        result["success"] = false;
+        result["error"] = "Failed to parse GDScript: " + String(parser.get_error().c_str());
+        UtilityFunctions::push_error("GD2TSConverter: Parse error: ", parser.get_error().c_str());
+        return result;
+    }
+
+    // Build AST
+    gd2ts::ASTBuilder ast_builder;
+    auto ast = ast_builder.build_ast(parser.get_root_node(), gd_source);
+    if (!ast) {
+        result["success"] = false;
+        result["error"] = "Failed to build AST";
+        UtilityFunctions::push_error("GD2TSConverter: Failed to build AST");
+        return result;
+    }
+
+    // Transform to TypeScript
+    gd2ts::ASTTransformer transformer;
+    std::string ts_output = transformer.transform(ast);
+
+    // Write to output file
+    Ref<FileAccess> out_file = FileAccess::open(ts_output_path, FileAccess::WRITE);
+    if (out_file.is_null()) {
+        result["success"] = false;
+        result["error"] = "Failed to write output file: " + ts_output_path;
+        UtilityFunctions::push_error("GD2TSConverter: Failed to write output: ", ts_output_path);
+        return result;
+    }
+
+    out_file->store_string(String(ts_output.c_str()));
+    out_file->close();
+
+    result["success"] = true;
+    result["message"] = "Successfully transpiled to: " + ts_output_path;
+    UtilityFunctions::print("GD2TSConverter: Successfully transpiled ", gd_path, " -> ", ts_output_path);
 
     return result;
 }
@@ -68,8 +121,27 @@ Dictionary GD2TSConverter::get_config() const {
 }
 
 String GD2TSConverter::transpile_string(const String &gdscript_source) {
-    // TODO: Implement string transpilation
-    // For now, return placeholder
-    UtilityFunctions::print("GD2TSConverter: transpile_string called with ", gdscript_source.length(), " characters");
-    return "// TypeScript output will appear here\n";
+    // Convert to std::string
+    std::string gd_source = std::string(gdscript_source.utf8().get_data());
+
+    // Parse the GDScript
+    gd2ts::GDScriptParser parser;
+    if (!parser.parse(gd_source)) {
+        UtilityFunctions::push_error("GD2TSConverter: Parse error: ", parser.get_error().c_str());
+        return String("// Parse error: ") + String(parser.get_error().c_str());
+    }
+
+    // Build AST
+    gd2ts::ASTBuilder ast_builder;
+    auto ast = ast_builder.build_ast(parser.get_root_node(), gd_source);
+    if (!ast) {
+        UtilityFunctions::push_error("GD2TSConverter: Failed to build AST");
+        return "// Failed to build AST\n";
+    }
+
+    // Transform to TypeScript
+    gd2ts::ASTTransformer transformer;
+    std::string ts_output = transformer.transform(ast);
+
+    return String(ts_output.c_str());
 }

@@ -87,6 +87,10 @@ env.Append(LIBS=[godot_cpp_lib])
 # Add our source path
 env.Append(CPPPATH=["src/"])
 
+# Setup tree-sitter core library
+tree_sitter_core_path = "tree-sitter-core"
+env.Append(CPPPATH=[tree_sitter_core_path + "/lib/include"])
+
 # Setup tree-sitter-gdscript
 tree_sitter_path = "tree-sitter-gdscript"
 env.Append(CPPPATH=[
@@ -101,7 +105,15 @@ sources += Glob("src/transformer/*.cpp")
 sources += Glob("src/generator/*.cpp")
 sources += Glob("src/utils/*.cpp")
 
-# Add tree-sitter sources
+# Add tree-sitter core library sources (excluding lib.c which is an amalgamation)
+import os
+tree_sitter_sources = []
+for src_file in Glob(tree_sitter_core_path + "/lib/src/*.c"):
+    if not str(src_file).endswith("lib.c"):
+        tree_sitter_sources.append(src_file)
+sources += tree_sitter_sources
+
+# Add tree-sitter-gdscript sources
 sources += [
     tree_sitter_path + "/src/parser.c",
     tree_sitter_path + "/src/scanner.c"

@@ -1,0 +1,127 @@
+[gd_scene load_steps=2 format=3 uid="uid://bvx2n4qvjqr5r"]
+
+[ext_resource type="Script" path="res://addons/gd2ts/ui/transpiler_panel.gd" id="1_transpiler_panel"]
+
+[node name="TranspilerPanel" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_transpiler_panel")
+
+[node name="VBoxContainer" type="VBoxContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 10.0
+offset_top = 10.0
+offset_right = -10.0
+offset_bottom = -10.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="Title" type="Label" parent="VBoxContainer"]
+layout_mode = 2
+text = "GDScript to TypeScript Transpiler"
+horizontal_alignment = 1
+
+[node name="HSeparator" type="HSeparator" parent="VBoxContainer"]
+layout_mode = 2
+
+[node name="ModeTabContainer" type="TabContainer" parent="VBoxContainer"]
+custom_minimum_size = Vector2(0, 150)
+layout_mode = 2
+
+[node name="SingleFile" type="VBoxContainer" parent="VBoxContainer/ModeTabContainer"]
+layout_mode = 2
+
+[node name="Label" type="Label" parent="VBoxContainer/ModeTabContainer/SingleFile"]
+layout_mode = 2
+text = "Select a GDScript file to transpile:"
+
+[node name="HBoxContainer" type="HBoxContainer" parent="VBoxContainer/ModeTabContainer/SingleFile"]
+layout_mode = 2
+
+[node name="FilePathEdit" type="LineEdit" parent="VBoxContainer/ModeTabContainer/SingleFile/HBoxContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+placeholder_text = "Path to .gd file"
+
+[node name="FileBrowseButton" type="Button" parent="VBoxContainer/ModeTabContainer/SingleFile/HBoxContainer"]
+layout_mode = 2
+text = "Browse..."
+
+[node name="Directory" type="VBoxContainer" parent="VBoxContainer/ModeTabContainer"]
+visible = false
+layout_mode = 2
+
+[node name="Label" type="Label" parent="VBoxContainer/ModeTabContainer/Directory"]
+layout_mode = 2
+text = "Select a directory containing GDScript files:"
+
+[node name="HBoxContainer" type="HBoxContainer" parent="VBoxContainer/ModeTabContainer/Directory"]
+layout_mode = 2
+
+[node name="DirPathEdit" type="LineEdit" parent="VBoxContainer/ModeTabContainer/Directory/HBoxContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+placeholder_text = "Path to directory"
+
+[node name="DirBrowseButton" type="Button" parent="VBoxContainer/ModeTabContainer/Directory/HBoxContainer"]
+layout_mode = 2
+text = "Browse..."
+
+[node name="HSeparator2" type="HSeparator" parent="VBoxContainer"]
+layout_mode = 2
+
+[node name="OutputSettings" type="VBoxContainer" parent="VBoxContainer"]
+layout_mode = 2
+
+[node name="Label" type="Label" parent="VBoxContainer/OutputSettings"]
+layout_mode = 2
+text = "Output Directory (optional, defaults to source directory):"
+
+[node name="HBoxContainer" type="HBoxContainer" parent="VBoxContainer/OutputSettings"]
+layout_mode = 2
+
+[node name="OutputPathEdit" type="LineEdit" parent="VBoxContainer/OutputSettings/HBoxContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+placeholder_text = "Output directory path"
+
+[node name="OutputBrowseButton" type="Button" parent="VBoxContainer/OutputSettings/HBoxContainer"]
+layout_mode = 2
+text = "Browse..."
+
+[node name="HSeparator3" type="HSeparator" parent="VBoxContainer"]
+layout_mode = 2
+
+[node name="TranspileButton" type="Button" parent="VBoxContainer"]
+custom_minimum_size = Vector2(0, 40)
+layout_mode = 2
+text = "Transpile"
+
+[node name="ProgressBar" type="ProgressBar" parent="VBoxContainer"]
+layout_mode = 2
+indeterminate = true
+show_percentage = false
+
+[node name="StatusLabel" type="Label" parent="VBoxContainer"]
+layout_mode = 2
+text = "Ready"
+
+[node name="HSeparator4" type="HSeparator" parent="VBoxContainer"]
+layout_mode = 2
+
+[node name="OutputLabel" type="Label" parent="VBoxContainer"]
+layout_mode = 2
+text = "Output Log:"
+
+[node name="OutputText" type="TextEdit" parent="VBoxContainer"]
+layout_mode = 2
+size_flags_vertical = 3
+placeholder_text = "Transpilation output will appear here..."
+wrap_mode = 1

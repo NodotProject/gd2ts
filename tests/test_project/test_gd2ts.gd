@@ -51,9 +51,17 @@ func _ready():
 	print("\nOutput TypeScript:")
 	print(result)
 
-	# Test transpile_file
-	print("\n--- Testing transpile_file ---")
-	var file_result = converter.transpile_file("res://test_input.gd", "res://test_output.ts")
+	# Test transpile_file with simple_class.gd
+	print("\n--- Testing transpile_file with simple_class.gd ---")
+	var input_file = "res://tests/gdscript_samples/simple_class.gd"
+	print("Input:  ", input_file)
+
+	var file_result = converter.transpile_string(input_file)
 	print("Result: ", file_result)
+
+	if file_result:
+		print("✓ File transpilation successful!")
+	else:
+		print("✗ File transpilation failed!")
 
 	print("\n=== Test Complete ===")

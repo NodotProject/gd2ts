@@ -11,7 +11,9 @@ config_version=5
 [application]
 
 config/name="gd2ts Test Project"
-config/features=PackedStringArray("4.3")
+run/main_scene="uid://cl85a3lu077bq"
+config/features=PackedStringArray("4.5")
+config/icon="uid://deyyoywxlgjpw"
 
 [editor_plugins]
 
