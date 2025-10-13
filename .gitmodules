@@ -1,0 +1,7 @@
+[submodule "godot-cpp"]
+	path = godot-cpp
+	url = https://github.com/godotengine/godot-cpp
+	branch = 4.3
+[submodule "tree-sitter-gdscript"]
+	path = tree-sitter-gdscript
+	url = https://github.com/PrestonKnopp/tree-sitter-gdscript

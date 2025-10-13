@@ -1,0 +1,42 @@
+# Node.js (legacy, if any)
+node_modules/
+dist/
+*.log
+coverage/
+
+# Editor
+.DS_Store
+.vscode/
+.idea/
+
+# Build artifacts
+addons/gd2ts/bin
+.scons*
+*.o
+*.os
+*.pyc
+*.so
+*.dll
+*.dylib
+*.a
+*.lib
+
+# Godot
+.godot/
+.import/
+*.import
+*.translation
+
+# Test project
+tests/test_project/.godot/
+tests/test_project/.import/
+
+# Compiled files
+*.o
+*.os
+*.obj
+
+# Config
+.env
+.ai
+.claude
