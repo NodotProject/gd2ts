@@ -71,58 +71,15 @@ bool ASTBuilder::node_is_null(TSNode node) const {
 }
 
 TSNode ASTBuilder::get_child_by_field(TSNode node, const char* field_name) const {
-    // Simplified implementation using named children
-    // This is a workaround - ideally we'd use ts_node_child_by_field_name
-    // but that requires additional tree-sitter API setup
+    // Use tree-sitter's native field API
+    TSNode field_node = ts_node_child_by_field_name(node, field_name, strlen(field_name));
 
-    std::string node_type = get_node_type(node);
-    std::string field = field_name;
-
-    // For class_definition/class_name_statement
-    if ((node_type == "class_definition" || node_type == "class_name_statement") && field == "name") {
-        // Look for "name" node
-        return get_child_by_type(node, "name");
-    }
-    else if ((node_type == "class_definition" || node_type == "class_name_statement") && field == "extends") {
-        // Look for "extends_statement" node
-        return get_child_by_type(node, "extends_statement");
-    }
-    else if (node_type == "class_definition" && field == "body") {
-        // Look for "class_body" node
-        return get_child_by_type(node, "class_body");
-    }
-    else if (node_type == "function_definition" && field == "name") {
-        return get_child_by_type(node, "name");
-    }
-    else if (node_type == "function_definition" && field == "parameters") {
-        return get_child_by_type(node, "parameters");
-    }
-    else if (node_type == "function_definition" && field == "return_type") {
-        return get_child_by_type(node, "type");
-    }
-    else if (node_type == "function_definition" && field == "body") {
-        return get_child_by_type(node, "body");
-    }
-    else if ((field == "name" || field == "value" || field == "type" || field == "left" || field == "right" ||
-              field == "condition" || field == "body") && node_is_named(node)) {
-        // Generic field lookup - find first named child matching the field description
-        uint32_t count = ts_node_child_count(node);
-        for (uint32_t i = 0; i < count; i++) {
-            TSNode child = ts_node_child(node, i);
-            if (node_is_named(child)) {
-                std::string child_type = get_node_type(child);
-                if ((field == "name" && child_type == "name") ||
-                    (field == "type" && (child_type == "type" || child_type == "inferred_type")) ||
-                    (field == "value" && i > 0) || // value typically comes after =
-                    (field == "body" && child_type == "body") ||
-                    (field == "condition") ||
-                    (field == "left" || field == "right")) {
-                    return child;
-                }
-            }
-        }
+    // If the field exists, return it
+    if (!node_is_null(field_node)) {
+        return field_node;
     }
 
+    // Fallback: try some common patterns
     TSNode null_node;
     memset(&null_node, 0, sizeof(TSNode));
     return null_node;

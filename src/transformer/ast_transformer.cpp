@@ -95,6 +95,16 @@ void ASTTransformer::transform_class_declaration(const ASTNodePtr& node) {
         }
     }
 
+    // Handle @tool annotation for class (matching ts2gd convention)
+    if (class_node->is_tool) {
+        generator.write_line("@tool");
+    }
+
+    // Handle other class-level annotations
+    for (const auto& annotation : class_node->annotations) {
+        generator.write_line("@" + annotation);
+    }
+
     // Write class declaration
     if (!class_node->class_name.empty()) {
         std::string class_decl = "class " + class_node->class_name;
@@ -188,12 +198,12 @@ void ASTTransformer::transform_variable_declaration(const ASTNodePtr& node) {
     auto var_node = std::dynamic_pointer_cast<VariableDecl>(node);
     if (!var_node) return;
 
-    // Handle @export annotation
+    // Handle @export annotation (matching ts2gd convention)
     if (var_node->is_export) {
-        generator.write_line("@export");
+        generator.write_line("@exports");
     }
 
-    // Handle @onready
+    // Handle @onready annotation
     if (var_node->is_onready) {
         generator.write_line("@onready");
     }
@@ -205,19 +215,20 @@ void ASTTransformer::transform_variable_declaration(const ASTNodePtr& node) {
         std::string ts_type = type_mapper.map_type(var_node->var_type);
         var_decl += ": " + ts_type;
         track_type_usage(ts_type);
-    } else if (var_node->initializer) {
-        // Try to infer type from initializer
-        std::string init_expr = transform_expression(var_node->initializer);
-        std::string inferred_type = type_mapper.infer_type_from_literal(init_expr);
-        if (inferred_type != "any") {
-            var_decl += ": " + inferred_type;
-        }
     }
 
     // Add initializer
     if (var_node->initializer) {
         var_decl += " = " + transform_expression(var_node->initializer);
+    } else if (var_node->var_type.empty()) {
+        // No type and no initializer - try to infer type as any
+        var_decl += ": any";
     }
+
+    // Handle setget (property getters/setters)
+    // Note: This is a comment for future implementation
+    // GDScript: var health = 100 setget set_health, get_health
+    // TypeScript: property with getter/setter methods
 
     generator.write_statement(var_decl);
 }
@@ -419,12 +430,69 @@ void ASTTransformer::transform_for_statement(const ASTNodePtr& node) {
 
     // Check if it's a range() call - transform to C-style for loop
     if (iterable.find("range(") == 0) {
-        // TODO: Parse range() parameters and generate proper for loop
-        // For now, use for-of
-        std::string for_decl = "for (const " + for_node->iterator_name + " of " + iterable + ")";
+        // Parse range() parameters: range(stop), range(start, stop), range(start, stop, step)
+        std::string range_params = iterable.substr(6, iterable.length() - 7);  // Extract content between ( )
+
+        // Split by commas (simple approach - doesn't handle nested calls)
+        std::vector<std::string> params;
+        std::string current;
+        int paren_depth = 0;
+        for (char c : range_params) {
+            if (c == '(' || c == '[' || c == '{') paren_depth++;
+            else if (c == ')' || c == ']' || c == '}') paren_depth--;
+            else if (c == ',' && paren_depth == 0) {
+                params.push_back(current);
+                current.clear();
+                continue;
+            }
+            current += c;
+        }
+        if (!current.empty()) params.push_back(current);
+
+        // Trim whitespace from params
+        for (auto& p : params) {
+            size_t start = p.find_first_not_of(" \t");
+            size_t end = p.find_last_not_of(" \t");
+            if (start != std::string::npos && end != std::string::npos) {
+                p = p.substr(start, end - start + 1);
+            }
+        }
+
+        std::string for_decl;
+        if (params.size() == 1) {
+            // range(stop): for (let i = 0; i < stop; i++)
+            for_decl = "for (let " + for_node->iterator_name + " = 0; " +
+                       for_node->iterator_name + " < " + params[0] + "; " +
+                       for_node->iterator_name + "++)";
+        } else if (params.size() == 2) {
+            // range(start, stop): for (let i = start; i < stop; i++)
+            for_decl = "for (let " + for_node->iterator_name + " = " + params[0] + "; " +
+                       for_node->iterator_name + " < " + params[1] + "; " +
+                       for_node->iterator_name + "++)";
+        } else if (params.size() == 3) {
+            // range(start, stop, step): for (let i = start; i < stop; i += step)
+            std::string step = params[2];
+            std::string step_op = " += ";
+
+            // Check if step is negative (simple check)
+            if (step[0] == '-' || step.find(" - ") != std::string::npos) {
+                // Negative step: use > comparison and += (step is already negative)
+                for_decl = "for (let " + for_node->iterator_name + " = " + params[0] + "; " +
+                           for_node->iterator_name + " > " + params[1] + "; " +
+                           for_node->iterator_name + " += " + step + ")";
+            } else {
+                for_decl = "for (let " + for_node->iterator_name + " = " + params[0] + "; " +
+                           for_node->iterator_name + " < " + params[1] + "; " +
+                           for_node->iterator_name + " += " + step + ")";
+            }
+        } else {
+            // Fallback: use for-of with range helper
+            for_decl = "for (const " + for_node->iterator_name + " of " + iterable + ")";
+        }
+
         generator.write_block_start(for_decl);
     } else {
-        // Regular for-of loop
+        // Regular for-of loop (for item in array)
         std::string for_decl = "for (const " + for_node->iterator_name + " of " + iterable + ")";
         generator.write_block_start(for_decl);
     }
@@ -471,10 +539,66 @@ void ASTTransformer::transform_match_statement(const ASTNodePtr& node) {
     generator.write_block_start("switch (" + value + ")");
 
     // Process pattern sections
-    for (const auto& pattern : match_node->pattern_sections) {
-        // TODO: Implement full pattern matching transformation
-        // For now, simple case transformation
-        generator.write_line("// TODO: Pattern matching");
+    for (const auto& pattern_section : match_node->pattern_sections) {
+        if (!pattern_section || !pattern_section->has_children()) continue;
+
+        // Pattern section structure: [pattern(s), body]
+        // GDScript allows multiple patterns per section: 1, 2, 3: ...
+        // We need to generate separate case statements for each
+
+        // Get patterns and body
+        std::vector<ASTNodePtr> patterns;
+        ASTNodePtr body = nullptr;
+
+        // Heuristic: last child is body, rest are patterns
+        if (pattern_section->children.size() >= 2) {
+            body = pattern_section->children.back();
+            for (size_t i = 0; i < pattern_section->children.size() - 1; ++i) {
+                patterns.push_back(pattern_section->children[i]);
+            }
+        } else if (pattern_section->children.size() == 1) {
+            // Only body, pattern might be in text
+            body = pattern_section->children[0];
+        }
+
+        // Generate case statements for each pattern
+        for (const auto& pattern : patterns) {
+            if (!pattern) continue;
+
+            std::string pattern_str = transform_expression(pattern);
+
+            // Check for special patterns
+            if (pattern_str == "_") {
+                // Wildcard pattern becomes default
+                generator.write("default:");
+            } else if (pattern_str.find("..") != std::string::npos) {
+                // Range pattern - not directly supported in switch
+                // We'll convert this to if-else later, for now comment
+                generator.write_line("// Range pattern not supported in switch: " + pattern_str);
+                continue;
+            } else if (pattern_str.find('[') != std::string::npos ||
+                       pattern_str.find('{') != std::string::npos) {
+                // Array/dict pattern matching - not supported in switch
+                generator.write_line("// Complex pattern matching not supported: " + pattern_str);
+                continue;
+            } else {
+                // Simple value pattern
+                generator.write("case " + pattern_str + ":");
+            }
+
+            generator.new_line();
+        }
+
+        // Generate body
+        if (body && body->has_children()) {
+            generator.indent();
+            for (const auto& stmt : body->children) {
+                transform_statement(stmt);
+            }
+            // Add break statement if not already present
+            generator.write_statement("break");
+            generator.dedent();
+        }
     }
 
     generator.write_block_end();
@@ -548,6 +672,12 @@ std::string ASTTransformer::transform_expression(const ASTNodePtr& node) {
             return transform_dictionary_literal(node);
         case NodeType::GetNodeExpression:
             return transform_get_node(node);
+        case NodeType::AwaitExpression:
+            return transform_await_expression(node);
+        case NodeType::LambdaExpression:
+            return transform_lambda_expression(node);
+        case NodeType::ConditionalExpression:
+            return transform_conditional_expression(node);
         default:
             return node->text;
     }
@@ -560,6 +690,49 @@ std::string ASTTransformer::transform_binary_expression(const ASTNodePtr& node) 
     std::string left = transform_expression(binary->left);
     std::string right = transform_expression(binary->right);
     std::string op = map_operator(binary->op);
+
+    // Check if this is a Vector/Transform operation that needs method call conversion
+    // In GDScript: v1 + v2, v1 - v2, v1 * v2, v1 / scalar
+    // In TypeScript: v1.add(v2), v1.sub(v2), v1.mul(v2), v1.div(scalar)
+
+    // Detect if left operand might be a vector/transform type (heuristic based)
+    // Common patterns: Vector2(...), Vector3(...), Transform2D(...), Transform3D(...)
+    // or variables that might contain them
+    bool might_be_vector = false;
+    for (const std::string& vector_type : {
+        "Vector2(", "Vector3(", "Vector4(", "Vector2i(", "Vector3i(", "Vector4i(",
+        "Transform2D(", "Transform3D(", "Basis(", "Quaternion(",
+        "Rect2(", "Rect2i(", "AABB(", "Plane("
+    }) {
+        if (left.find(vector_type) != std::string::npos) {
+            might_be_vector = true;
+            break;
+        }
+    }
+
+    // Also check for chained method calls that might return vectors
+    if (left.find(".normalized(") != std::string::npos ||
+        left.find(".rotated(") != std::string::npos ||
+        left.find(".direction_to(") != std::string::npos) {
+        might_be_vector = true;
+    }
+
+    // If this might be a vector operation and the operator is arithmetic, convert to method call
+    if (might_be_vector && (op == "+" || op == "-" || op == "*" || op == "/")) {
+        std::string method;
+        if (op == "+") method = "add";
+        else if (op == "-") method = "sub";
+        else if (op == "*") method = "mul";
+        else if (op == "/") method = "div";
+
+        // Need to wrap left expression in parens if it's complex
+        std::string left_wrapped = left;
+        if (left.find(' ') != std::string::npos && left[0] != '(') {
+            left_wrapped = "(" + left + ")";
+        }
+
+        return left_wrapped + "." + method + "(" + right + ")";
+    }
 
     return left + " " + op + " " + right;
 }
@@ -579,6 +752,54 @@ std::string ASTTransformer::transform_call_expression(const ASTNodePtr& node) {
     if (!call) return "";
 
     std::string callee = transform_expression(call->callee);
+
+    // Handle special Godot function calls
+
+    // Handle signal.emit() -> $signal.emit()
+    if (callee.find(".emit") != std::string::npos) {
+        size_t dot_pos = callee.find_last_of('.');
+        if (dot_pos != std::string::npos) {
+            std::string signal_name = callee.substr(0, dot_pos);
+            // If it's a direct signal reference (not already prefixed), add $
+            if (signal_name.find("this.$") == std::string::npos &&
+                signal_name.find('$') == std::string::npos &&
+                signal_name.find('.') == std::string::npos) {
+                callee = "this.$" + signal_name + ".emit";
+            }
+        }
+    }
+
+    // Handle signal.connect() -> $signal.connect()
+    if (callee.find(".connect") != std::string::npos) {
+        size_t dot_pos = callee.find_last_of('.');
+        if (dot_pos != std::string::npos) {
+            std::string signal_name = callee.substr(0, dot_pos);
+            // If it's a direct signal reference (not already prefixed), add $
+            if (signal_name.find("this.$") == std::string::npos &&
+                signal_name.find('$') == std::string::npos &&
+                signal_name.find('.') == std::string::npos) {
+                callee = "this.$" + signal_name + ".connect";
+            }
+        }
+    }
+
+    // Handle preload() -> resource loading
+    if (callee == "preload") {
+        std::string args_str;
+        if (!call->arguments.empty()) {
+            args_str = transform_expression(call->arguments[0]);
+        }
+        return "preload(" + args_str + ")";
+    }
+
+    // Handle load() -> resource loading
+    if (callee == "load") {
+        std::string args_str;
+        if (!call->arguments.empty()) {
+            args_str = transform_expression(call->arguments[0]);
+        }
+        return "load(" + args_str + ")";
+    }
 
     std::string args = "(";
     for (size_t i = 0; i < call->arguments.size(); ++i) {
@@ -610,10 +831,18 @@ std::string ASTTransformer::transform_subscript_expression(const ASTNodePtr& nod
 
 std::string ASTTransformer::transform_identifier(const ASTNodePtr& node) {
     auto ident = std::dynamic_pointer_cast<IdentifierExpr>(node);
+    std::string name;
     if (ident) {
-        return replace_keywords(ident->name);
+        name = ident->name;
+    } else {
+        name = node->text;
     }
-    return replace_keywords(node->text);
+
+    // Check for $NodePath shorthand syntax
+    name = transform_node_path_shorthand(name);
+
+    // Replace GDScript keywords
+    return replace_keywords(name);
 }
 
 std::string ASTTransformer::transform_literal(const ASTNodePtr& node) {
@@ -651,7 +880,34 @@ std::string ASTTransformer::transform_get_node(const ASTNodePtr& node) {
     if (!node || node->children.empty()) return "";
 
     std::string path = transform_expression(node->children[0]);
+
+    // If the path is a string literal, we can use it directly
+    // Handle both $NodePath and get_node("NodePath") syntax
     return "this.get_node(" + path + ")";
+}
+
+// Helper function to detect and transform $NodePath syntax in expressions
+std::string ASTTransformer::transform_node_path_shorthand(const std::string& identifier) {
+    // Check if this is a $ prefixed node path (e.g., $Player, $UI/Label)
+    if (!identifier.empty() && identifier[0] == '$') {
+        // Extract the path (everything after $)
+        std::string path = identifier.substr(1);
+
+        // Handle special cases
+        if (path.empty()) {
+            // Just $ by itself is not valid
+            return identifier;
+        }
+
+        // Handle relative paths (..) and absolute paths (/)
+        // GDScript: $"../Player" or $"/root/Player"
+        // These should be preserved in the path string
+
+        // Convert to get_node call with string literal
+        // Note: In ts2gd convention, we use get_node() method
+        return "this.get_node(\"" + path + "\")";
+    }
+    return identifier;
 }
 
 std::string ASTTransformer::get_function_parameters(const std::vector<ASTNodePtr>& params) {
@@ -700,7 +956,84 @@ void ASTTransformer::track_type_usage(const std::string& type) {
 
 std::string ASTTransformer::replace_keywords(const std::string& text) {
     if (text == "self") return "this";
+
+    // Check if this is a known autoload/singleton
+    // Common Godot autoloads like Global, GameManager, etc.
+    // In TypeScript, these should be accessed the same way
+    // For now, we'll preserve them as-is
+    // Future enhancement: Could parse project.godot to detect autoloads
+    // and add proper type annotations
+
     return text;
+}
+
+std::string ASTTransformer::transform_await_expression(const ASTNodePtr& node) {
+    if (!node || node->children.empty()) return "";
+
+    std::string expr = transform_expression(node->children[0]);
+
+    // In GDScript 2.0 (Godot 4.x): await signal or await coroutine
+    // In TypeScript (ts2gd convention): await this.$signal or yield this.$signal
+
+    // Check if this is awaiting a signal
+    // Pattern: await signal_name or await obj.signal_name
+    if (expr.find("this.$") != std::string::npos || expr.find('$') != std::string::npos) {
+        // Already formatted as signal, use yield for ts2gd compatibility
+        return "yield " + expr;
+    }
+
+    // For signal references without $, add it
+    if (expr.find('.') == std::string::npos && expr.find('(') == std::string::npos) {
+        // Simple identifier - likely a signal
+        return "yield this.$" + expr;
+    }
+
+    // Otherwise, treat as regular await (for async functions)
+    return "await " + expr;
+}
+
+std::string ASTTransformer::transform_lambda_expression(const ASTNodePtr& node) {
+    if (!node) return "";
+
+    // GDScript lambda: func(x, y): return x + y
+    // TypeScript arrow function: (x, y) => x + y
+
+    // For now, return a placeholder
+    // Full implementation would need to parse lambda parameters and body
+    // This is a complex feature that depends on tree-sitter parsing
+
+    if (node->has_children()) {
+        // Try to extract parameters and body
+        std::string params = "()";
+        std::string body = "";
+
+        // Simple heuristic: if we have children, transform them
+        if (node->children.size() >= 2) {
+            // First child might be params, second might be body
+            params = transform_expression(node->children[0]);
+            body = transform_expression(node->children[1]);
+        } else if (node->children.size() == 1) {
+            body = transform_expression(node->children[0]);
+        }
+
+        return params + " => " + body;
+    }
+
+    return "() => {}";
+}
+
+std::string ASTTransformer::transform_conditional_expression(const ASTNodePtr& node) {
+    if (!node || node->children.size() < 3) return "";
+
+    // GDScript ternary: x if condition else y
+    // TypeScript ternary: condition ? x : y
+
+    // Assuming children are: [condition, true_expr, false_expr]
+    std::string condition = transform_expression(node->children[0]);
+    std::string true_expr = transform_expression(node->children[1]);
+    std::string false_expr = transform_expression(node->children[2]);
+
+    return condition + " ? " + true_expr + " : " + false_expr;
 }
 
 void ASTTransformer::set_indent_style(const std::string& style) {

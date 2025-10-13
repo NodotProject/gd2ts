@@ -16,6 +16,7 @@ private:
     TypeMapper type_mapper;
     std::set<std::string> required_imports;
     std::set<std::string> godot_types_used;
+    std::set<std::string> autoload_singletons;  // Track known autoload names
 
     // Transform methods for declarations
     void transform_class_declaration(const ASTNodePtr& node);
@@ -47,6 +48,9 @@ private:
     std::string transform_array_literal(const ASTNodePtr& node);
     std::string transform_dictionary_literal(const ASTNodePtr& node);
     std::string transform_get_node(const ASTNodePtr& node);
+    std::string transform_await_expression(const ASTNodePtr& node);
+    std::string transform_lambda_expression(const ASTNodePtr& node);
+    std::string transform_conditional_expression(const ASTNodePtr& node);
 
     // Helper methods
     std::string get_function_parameters(const std::vector<ASTNodePtr>& params);
@@ -57,6 +61,7 @@ private:
 
     // Special keyword handling
     std::string replace_keywords(const std::string& text);
+    std::string transform_node_path_shorthand(const std::string& identifier);
 
 public:
     ASTTransformer();

@@ -54,14 +54,21 @@ func _ready():
 	# Test transpile_file with simple_class.gd
 	print("\n--- Testing transpile_file with simple_class.gd ---")
 	var input_file = "res://tests/gdscript_samples/simple_class.gd"
+	var output_file = "res://tests/output/simple_class.ts"
 	print("Input:  ", input_file)
+	print("Output: ", output_file)
 
-	var file_result = converter.transpile_string(input_file)
+	var file_result = converter.transpile_file(input_file, output_file)
 	print("Result: ", file_result)
 
-	if file_result:
+	if file_result.get("success", false):
 		print("✓ File transpilation successful!")
+		print("  Message: ", file_result.get("message", ""))
 	else:
 		print("✗ File transpilation failed!")
+		print("  Error: ", file_result.get("error", "unknown error"))
 
 	print("\n=== Test Complete ===")
+
+	# Quit after tests
+	get_tree().quit()
