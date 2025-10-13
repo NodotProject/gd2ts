@@ -11,6 +11,7 @@ coverage/
 
 # Build artifacts
 addons/gd2ts/bin
+godot-cpp
 .scons*
 *.o
 *.os

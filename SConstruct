@@ -61,10 +61,11 @@ if env["use_llvm"]:
     env["CXX"] = "clang++"
 
 # Setup godot-cpp
-env.Append(CPPPATH=["godot-cpp/include/", "godot-cpp/gen/include/"])
+env.Append(CPPPATH=["godot-cpp/gdextension/", "godot-cpp/include/", "godot-cpp/gen/include/"])
 env.Append(LIBPATH=["godot-cpp/bin/"])
 
 # Get godot-cpp library name
+# Note: Prebuilt binaries only include release versions
 godot_cpp_lib = "libgodot-cpp"
 if env["platform"] == "linux":
     godot_cpp_lib += ".linux"
@@ -73,7 +74,8 @@ elif env["platform"] == "windows":
 elif env["platform"] == "macos":
     godot_cpp_lib += ".macos"
 
-godot_cpp_lib += ".{}.{}".format(env["target"], env["arch"])
+# Always use template_release for prebuilt binaries
+godot_cpp_lib += ".template_release.{}".format(env["arch"])
 
 if env["platform"] == "windows":
     godot_cpp_lib += ".lib"
@@ -86,7 +88,7 @@ env.Append(LIBS=[godot_cpp_lib])
 env.Append(CPPPATH=["src/"])
 
 # Setup tree-sitter-gdscript
-tree_sitter_path = "thirdparty/tree-sitter-gdscript"
+tree_sitter_path = "tree-sitter-gdscript"
 env.Append(CPPPATH=[
     tree_sitter_path + "/src",
     tree_sitter_path + "/src/tree_sitter"

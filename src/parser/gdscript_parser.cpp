@@ -1,11 +1,9 @@
 #include "gdscript_parser.h"
 #include <cstring>
 
-// Tree-sitter C API
+// Tree-sitter GDScript language
 extern "C" {
-    #include "tree_sitter/api.h"
-    // This will be provided by tree-sitter-gdscript
-    TSLanguage *tree_sitter_gdscript();
+    const TSLanguage *tree_sitter_gdscript(void);
 }
 
 namespace gd2ts {

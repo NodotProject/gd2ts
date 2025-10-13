@@ -3,14 +3,7 @@
 
 #include <string>
 #include <memory>
-
-// Forward declarations for tree-sitter types
-extern "C" {
-    typedef struct TSParser TSParser;
-    typedef struct TSTree TSTree;
-    typedef struct TSNode TSNode;
-    typedef struct TSLanguage TSLanguage;
-}
+#include "tree_sitter_api.h"
 
 namespace gd2ts {
 
