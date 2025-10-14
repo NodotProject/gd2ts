@@ -62,7 +62,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: gd2ts-linux-x86_64
-          path: addons/gd2ts/bin/linux.*/*
+          path: addons/gd2ts/bin/linux/*
           retention-days: 7
 
   # GDScript integration tests using GUT
