@@ -23,15 +23,13 @@ env = Environment(variables=opts)
 # - CXXFLAGS are for C++-specific compilation flags
 # - LINKFLAGS are for linking flags
 
-# Require C++17
-env.Append(CXXFLAGS=["-std=c++17"])
-
 # Platform-specific settings
 if env["platform"] == "":
     env["platform"] = sys.platform
 
 if env["platform"] == "linux" or env["platform"] == "linux2":
     env["platform"] = "linux"
+    env.Append(CXXFLAGS=["-std=c++17"])
     env.Append(CCFLAGS=["-fPIC"])
     env.Append(LINKFLAGS=["-Wl,-rpath,'$$ORIGIN'"])
     if env["target"] == "template_debug":
@@ -41,7 +39,7 @@ if env["platform"] == "linux" or env["platform"] == "linux2":
 
 elif env["platform"] == "windows" or env["platform"] == "win32":
     env["platform"] = "windows"
-    env.Append(CXXFLAGS=["/EHsc", "/vmg"])
+    env.Append(CXXFLAGS=["/std:c++17", "/EHsc", "/vmg"])
     if env["target"] == "template_debug":
         env.Append(CCFLAGS=["/DEBUG", "/Od"])
     else:
@@ -49,6 +47,7 @@ elif env["platform"] == "windows" or env["platform"] == "win32":
 
 elif env["platform"] == "darwin" or env["platform"] == "osx":
     env["platform"] = "macos"
+    env.Append(CXXFLAGS=["-std=c++17"])
     env.Append(CCFLAGS=["-arch", "x86_64", "-arch", "arm64"])
     env.Append(LINKFLAGS=["-arch", "x86_64", "-arch", "arm64"])
     if env["target"] == "template_debug":
