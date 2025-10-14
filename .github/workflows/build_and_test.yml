@@ -1,0 +1,125 @@
+name: Build and Test
+
+on:
+  push:
+    branches: [ main, master, develop ]
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+env:
+  GODOT_VERSION: "4.5"
+  GODOT_VERSION_FULL: "4.5.0"
+  SCONS_CACHE_LIMIT: 7168
+
+jobs:
+  # Build for Linux
+  build-linux:
+    runs-on: ubuntu-latest
+    name: Build Linux (x86_64)
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Checkout tree-sitter-gdscript submodule
+        run: git submodule update --init --recursive tree-sitter-gdscript
+
+      - name: Setup GDExtension Build Environment
+        uses: NodotProject/godot-cpp-builds@v1
+        with:
+          godot-version: '4.5-stable'
+          godot-cpp-path: './godot-cpp'
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential scons pkg-config
+
+      - name: Setup SCons cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ${{ github.workspace }}/.scons-cache/
+          key: ${{ runner.os }}-scons-${{ hashFiles('**/*.cpp', '**/*.h') }}
+          restore-keys: |
+            ${{ runner.os }}-scons-
+
+      - name: Build GDExtension (Debug)
+        run: |
+          scons platform=linux target=template_debug -j$(nproc)
+
+      - name: Build GDExtension (Release)
+        run: |
+          scons platform=linux target=template_release -j$(nproc)
+
+      - name: Upload Linux artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: gd2ts-linux-x86_64
+          path: addons/gd2ts/bin/linux.*/*
+          retention-days: 7
+
+  # GDScript integration tests using GUT
+  gdscript-tests:
+    runs-on: ubuntu-latest
+    name: GDScript Tests (GUT)
+    needs: build-linux
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Checkout tree-sitter-gdscript submodule
+        run: git submodule update --init --recursive tree-sitter-gdscript
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libx11-dev libxcursor-dev libxinerama-dev libgl1-mesa-dev \
+            libglu1-mesa-dev libasound2-dev libpulse-dev libudev-dev \
+            libxi-dev libxrandr-dev
+
+      - name: Install Godot
+        uses: chickensoft-games/setup-godot@v2
+        with:
+          version: ${{ env.GODOT_VERSION_FULL }}
+          use-dotnet: false
+          include-templates: false
+
+      - name: Install GUT
+        run: |
+          git clone https://github.com/bitwes/Gut.git gut_temp
+          mkdir -p addons
+          mv gut_temp/addons/gut addons/
+          rm -rf gut_temp
+
+      - name: Download Linux artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: gd2ts-linux-x86_64
+          path: addons/gd2ts/bin/
+
+      - name: Import project
+        run: |
+          timeout 60 godot --headless --import --quit || true
+
+      - name: Run GUT tests
+        run: |
+          godot --headless --path . -s addons/gut/gut_cmdln.gd -gexit
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: |
+            .gut/
+            *.log
+          retention-days: 7
