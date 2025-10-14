@@ -97,7 +97,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: gd2ts-linux-x86_64
-          path: addons/gd2ts/bin/
+          path: addons/gd2ts/bin/linux/
 
       - name: Import project
         run: |
