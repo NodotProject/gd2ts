@@ -121,84 +121,10 @@ jobs:
           path: addons/gd2ts/bin/windows.*/*
           retention-days: 7
 
-  build-macos:
-    runs-on: macos-latest
-    name: Build macOS (Universal)
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Checkout tree-sitter submodules
-        run: git submodule update --init --recursive tree-sitter-gdscript tree-sitter-core
-
-      - name: Setup GDExtension Build Environment
-        uses: NodotProject/godot-cpp-builds@v1
-        with:
-          godot-version: '4.5-stable'
-          godot-cpp-path: './godot-cpp'
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.x'
-
-      - name: Install dependencies
-        run: |
-          brew install scons
-
-      - name: Setup SCons cache
-        uses: actions/cache@v4
-        with:
-          path: |
-            ${{ github.workspace }}/.scons-cache/
-          key: ${{ runner.os }}-scons-${{ hashFiles('**/*.cpp', '**/*.h') }}
-          restore-keys: |
-            ${{ runner.os }}-scons-
-
-      - name: Build GDExtension (Debug x86_64)
-        run: |
-          scons platform=macos target=template_debug arch=x86_64
-
-      - name: Build GDExtension (Debug arm64)
-        run: |
-          scons platform=macos target=template_debug arch=arm64
-
-      - name: Build GDExtension (Release x86_64)
-        run: |
-          scons platform=macos target=template_release arch=x86_64
-
-      - name: Build GDExtension (Release arm64)
-        run: |
-          scons platform=macos target=template_release arch=arm64
-
-      - name: Create universal binaries (Debug)
-        run: |
-          mkdir -p addons/gd2ts/bin/macos.debug
-          lipo -create \
-            addons/gd2ts/bin/macos.debug/libgd2ts.x86_64.dylib \
-            addons/gd2ts/bin/macos.debug/libgd2ts.arm64.dylib \
-            -output addons/gd2ts/bin/macos.debug/libgd2ts.dylib
-
-      - name: Create universal binaries (Release)
-        run: |
-          mkdir -p addons/gd2ts/bin/macos.release
-          lipo -create \
-            addons/gd2ts/bin/macos.release/libgd2ts.x86_64.dylib \
-            addons/gd2ts/bin/macos.release/libgd2ts.arm64.dylib \
-            -output addons/gd2ts/bin/macos.release/libgd2ts.dylib
-
-      - name: Upload macOS artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: gd2ts-macos-universal
-          path: addons/gd2ts/bin/macos.*/*
-          retention-days: 7
-
   create-addon-package:
     runs-on: ubuntu-latest
     name: Create addon package
-    needs: [build-linux, build-windows, build-macos]
+    needs: [build-linux, build-windows]
 
     steps:
       - name: Checkout repository
@@ -217,12 +143,6 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: gd2ts-windows-x86_64
-          path: package/addons/gd2ts/bin/
-
-      - name: Download macOS artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: gd2ts-macos-universal
           path: package/addons/gd2ts/bin/
 
       - name: Copy gdextension file

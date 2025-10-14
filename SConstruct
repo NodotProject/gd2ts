@@ -41,6 +41,7 @@ if env["platform"] == "linux" or env["platform"] == "linux2":
 
 elif env["platform"] == "windows" or env["platform"] == "win32":
     env["platform"] = "windows"
+    env.Append(CXXFLAGS=["/EHsc", "/vmg"])
     if env["target"] == "template_debug":
         env.Append(CCFLAGS=["/DEBUG", "/Od"])
     else:
