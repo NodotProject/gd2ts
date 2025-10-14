@@ -37,6 +37,7 @@ void ASTBuilder::initialize_node_type_map() {
     node_type_map["get_node"] = NodeType::GetNodeExpression;
     node_type_map["await_expression"] = NodeType::AwaitExpression;
     node_type_map["identifier"] = NodeType::Identifier;
+    node_type_map["self"] = NodeType::Identifier;  // Treat 'self' keyword as identifier
     node_type_map["integer"] = NodeType::IntegerLiteral;
     node_type_map["float"] = NodeType::FloatLiteral;
     node_type_map["string"] = NodeType::StringLiteral;
@@ -779,7 +780,7 @@ ASTNodePtr ASTBuilder::build_expression(TSNode node) {
 
     std::string type = get_node_type(node);
 
-    if (type == "identifier") {
+    if (type == "identifier" || type == "self") {
         return build_identifier(node);
     }
     else if (type == "integer" || type == "float" || type == "string" ||

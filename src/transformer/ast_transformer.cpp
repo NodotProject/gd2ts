@@ -857,7 +857,9 @@ std::string ASTTransformer::transform_expression(const ASTNodePtr& node) {
         case NodeType::ConditionalExpression:
             return transform_conditional_expression(node);
         default:
-            return node->text;
+            // For unknown node types, return the text but pass through keyword replacement
+            // This handles cases where the parser creates nodes with text like "self"
+            return replace_keywords(node->text);
     }
 }
 
@@ -868,6 +870,52 @@ std::string ASTTransformer::transform_binary_expression(const ASTNodePtr& node) 
     std::string left = transform_expression(binary->left);
     std::string right = transform_expression(binary->right);
     std::string op = map_operator(binary->op);
+
+    // Handle 'is' operator - convert to instanceof
+    if (binary->op == "is") {
+        return left + " instanceof " + right;
+    }
+
+    // Handle typeof comparisons with TYPE_* constants
+    // GDScript: typeof(x) == TYPE_INT
+    // TypeScript: typeof x === "number"
+    if (left.find("typeof") == 0 && (op == "==" || op == "===")) {
+        // Check if right side is a TYPE_* constant
+        if (right == "TYPE_INT" || right == "TYPE_FLOAT") {
+            return left + " === \"number\"";
+        } else if (right == "TYPE_STRING") {
+            return left + " === \"string\"";
+        } else if (right == "TYPE_BOOL") {
+            return left + " === \"boolean\"";
+        } else if (right == "TYPE_OBJECT") {
+            return left + " === \"object\"";
+        } else if (right == "TYPE_NIL" || right == "TYPE_NULL") {
+            // For null checks, we should use === null instead of typeof
+            // Extract the variable from typeof
+            size_t start = left.find("typeof ");
+            if (start != std::string::npos) {
+                std::string var = left.substr(start + 7);
+                return var + " === null";
+            }
+        }
+    }
+
+    // Handle typeof(null) comparisons - these should become simpler null checks
+    if (left == "null" && right.find("typeof") == 0) {
+        // typeof(var) == typeof(null) -> var === null
+        size_t start = right.find("typeof ");
+        if (start != std::string::npos) {
+            std::string var = right.substr(start + 7);
+            return var + " === null";
+        }
+    } else if (left.find("typeof") == 0 && right == "null") {
+        // typeof(var) == typeof(null) -> var === null
+        size_t start = left.find("typeof ");
+        if (start != std::string::npos) {
+            std::string var = left.substr(start + 7);
+            return var + " === null";
+        }
+    }
 
     // Check if this is a Vector/Transform operation that needs method call conversion
     // In GDScript: v1 + v2, v1 - v2, v1 * v2, v1 / scalar
@@ -931,6 +979,22 @@ std::string ASTTransformer::transform_call_expression(const ASTNodePtr& node) {
 
     std::string callee = transform_expression(call->callee);
 
+    // Handle typeof() function calls - convert to TypeScript typeof or remove
+    if (callee == "typeof") {
+        if (!call->arguments.empty()) {
+            std::string arg = transform_expression(call->arguments[0]);
+            // Check if argument is null - typeof(null) should be removed or converted
+            if (arg == "null") {
+                // typeof(null) in GDScript checks doesn't make sense in TS
+                // This should be handled by the calling context
+                return "null";
+            }
+            // Regular typeof call
+            return "typeof " + arg;
+        }
+        return "typeof undefined";
+    }
+
     // Handle special Godot function calls
 
     // Handle signal.emit() -> $signal.emit()
@@ -990,10 +1054,19 @@ std::string ASTTransformer::transform_call_expression(const ASTNodePtr& node) {
 }
 
 std::string ASTTransformer::transform_attribute_expression(const ASTNodePtr& node) {
-    if (!node || node->children.size() < 2) return "";
+    if (!node || node->children.size() < 2) {
+        // If we don't have the expected children, fall back to text
+        if (node) {
+            return replace_keywords(node->text);
+        }
+        return "";
+    }
 
     std::string object = transform_expression(node->children[0]);
     std::string attribute = transform_expression(node->children[1]);
+
+    // Note: self->this conversion is already handled by transform_identifier via replace_keywords
+    // No need to check here since transform_expression already does the conversion
 
     return object + "." + attribute;
 }
@@ -1019,7 +1092,7 @@ std::string ASTTransformer::transform_identifier(const ASTNodePtr& node) {
     // Check for $NodePath shorthand syntax
     name = transform_node_path_shorthand(name);
 
-    // Replace GDScript keywords
+    // Replace GDScript keywords (including standalone 'self')
     return replace_keywords(name);
 }
 
@@ -1042,12 +1115,15 @@ std::string ASTTransformer::transform_array_literal(const ASTNodePtr& node) {
 
 std::string ASTTransformer::transform_dictionary_literal(const ASTNodePtr& node) {
     std::string result = "{";
-    // Dictionary children come in key-value pairs
-    for (size_t i = 0; i < node->children.size(); i += 2) {
+    // Dictionary children are "pair" nodes, each containing key and value
+    for (size_t i = 0; i < node->children.size(); ++i) {
         if (i > 0) result += ", ";
-        result += transform_expression(node->children[i]) + ": ";
-        if (i + 1 < node->children.size()) {
-            result += transform_expression(node->children[i + 1]);
+
+        auto pair = node->children[i];
+        if (pair && pair->node_type_str == "pair" && pair->children.size() >= 2) {
+            // First child is key, second is value
+            result += transform_expression(pair->children[0]) + ": ";
+            result += transform_expression(pair->children[1]);
         }
     }
     result += "}";
@@ -1135,6 +1211,47 @@ void ASTTransformer::track_type_usage(const std::string& type) {
 std::string ASTTransformer::replace_keywords(const std::string& text) {
     if (text == "self") return "this";
 
+    // Handle self. prefix in attribute accesses
+    // This handles cases where attribute expressions fall through to default case
+    if (text.find("self.") == 0) {
+        return "this." + text.substr(5);  // Replace "self." with "this."
+    }
+
+    // Handle self in middle of expressions (e.g., "method(self.property)")
+    std::string result = text;
+    size_t pos = 0;
+    while ((pos = result.find("self.", pos)) != std::string::npos) {
+        result.replace(pos, 5, "this.");
+        pos += 5;
+    }
+
+    // Handle standalone self (e.g., "return self")
+    // Need to be careful not to replace in words like "yourself"
+    pos = 0;
+    while ((pos = result.find("self", pos)) != std::string::npos) {
+        // Check if this is a standalone "self" (not part of another word)
+        bool is_standalone = true;
+        if (pos > 0) {
+            char before = result[pos - 1];
+            if (std::isalnum(before) || before == '_') {
+                is_standalone = false;
+            }
+        }
+        if (pos + 4 < result.length()) {
+            char after = result[pos + 4];
+            if (std::isalnum(after) || after == '_') {
+                is_standalone = false;
+            }
+        }
+
+        if (is_standalone) {
+            result.replace(pos, 4, "this");
+            pos += 4;
+        } else {
+            pos += 4;
+        }
+    }
+
     // Check if this is a known autoload/singleton
     // Common Godot autoloads like Global, GameManager, etc.
     // In TypeScript, these should be accessed the same way
@@ -1142,7 +1259,7 @@ std::string ASTTransformer::replace_keywords(const std::string& text) {
     // Future enhancement: Could parse project.godot to detect autoloads
     // and add proper type annotations
 
-    return text;
+    return result;
 }
 
 std::string ASTTransformer::transform_await_expression(const ASTNodePtr& node) {
