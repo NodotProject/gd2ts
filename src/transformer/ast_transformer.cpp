@@ -1054,21 +1054,28 @@ std::string ASTTransformer::transform_call_expression(const ASTNodePtr& node) {
 }
 
 std::string ASTTransformer::transform_attribute_expression(const ASTNodePtr& node) {
-    if (!node || node->children.size() < 2) {
-        // If we don't have the expected children, fall back to text
-        if (node) {
-            return replace_keywords(node->text);
-        }
-        return "";
+    if (!node) return "";
+
+    // Check if we have children
+    if (node->children.empty()) {
+        // Fall back to text if no children
+        return replace_keywords(node->text);
     }
 
-    std::string object = transform_expression(node->children[0]);
-    std::string attribute = transform_expression(node->children[1]);
+    // Build the attribute access by joining all children with dots
+    // Tree-sitter creates attribute nodes with all parts as separate children
+    // For example: mod.UIAnchor.Center has 3 children: [mod, UIAnchor, Center]
+    //              get_tree().create_timer(1.0).timeout has 3 children: [call node, call node, timeout]
+    std::string result;
+    for (size_t i = 0; i < node->children.size(); ++i) {
+        if (i > 0) result += ".";
+        result += transform_expression(node->children[i]);
+    }
 
     // Note: self->this conversion is already handled by transform_identifier via replace_keywords
     // No need to check here since transform_expression already does the conversion
 
-    return object + "." + attribute;
+    return result;
 }
 
 std::string ASTTransformer::transform_subscript_expression(const ASTNodePtr& node) {
