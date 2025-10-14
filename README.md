@@ -79,12 +79,10 @@ This project incorporates the following third-party components:
 ### tree-sitter
 - **Repository**: https://github.com/tree-sitter/tree-sitter
 - **License**: MIT License
-- **Copyright**: (c) 2018 Max Brunsfeld
 
 ### tree-sitter-gdscript
 - **Repository**: https://github.com/PrestonKnopp/tree-sitter-gdscript
 - **License**: MIT License
-- **Copyright**: (c) 2016 Max Brunsfeld
 
 For the full text of the MIT License, see the LICENSE files in the respective submodule directories.
 
