@@ -18,35 +18,142 @@ std::string ASTTransformer::transform(const ASTNodePtr& ast) {
 
     // Process root node
     if (ast->type == NodeType::Source) {
-        // Process all top-level nodes
+        // Check if we have extends/class_name at module level - if so, wrap in a class
+        std::string extends_type;
+        std::string class_name;
+        std::vector<ASTNodePtr> class_members;
+        std::vector<ASTNodePtr> non_class_items;
+
+        // First pass: collect extends, class_name, and categorize children
         for (const auto& child : ast->children) {
             if (!child) continue;
 
-            switch (child->type) {
-                case NodeType::ClassDeclaration:
-                    transform_class_declaration(child);
-                    break;
-                case NodeType::FunctionDeclaration:
-                    transform_function_declaration(child);
-                    break;
-                case NodeType::VariableDeclaration:
-                    transform_variable_declaration(child);
-                    break;
-                case NodeType::ConstDeclaration:
-                    transform_const_declaration(child);
-                    break;
-                case NodeType::SignalDeclaration:
-                    transform_signal_declaration(child);
-                    break;
-                case NodeType::EnumDeclaration:
-                    transform_enum_declaration(child);
-                    break;
-                case NodeType::Comment:
-                    generator.write_line("// " + child->text);
-                    break;
-                default:
-                    // Unknown top-level node
-                    break;
+            if (child->type == NodeType::ExtendsStatement) {
+                extends_type = child->text;
+                // Extract just the type name (remove "extends " prefix)
+                size_t space_pos = extends_type.find(' ');
+                if (space_pos != std::string::npos) {
+                    extends_type = extends_type.substr(space_pos + 1);
+                }
+            } else if (child->type == NodeType::ClassNameStatement) {
+                auto class_decl = std::dynamic_pointer_cast<ClassDecl>(child);
+                if (class_decl) {
+                    class_name = class_decl->class_name;
+                }
+            } else if (child->type == NodeType::FunctionDeclaration ||
+                       child->type == NodeType::VariableDeclaration ||
+                       child->type == NodeType::ConstDeclaration ||
+                       child->type == NodeType::SignalDeclaration ||
+                       child->type == NodeType::EnumDeclaration) {
+                class_members.push_back(child);
+            } else {
+                non_class_items.push_back(child);
+            }
+        }
+
+        // If we have extends or class_name, wrap everything in a class
+        if (!extends_type.empty() || !class_name.empty()) {
+            // Output non-class items first (comments, etc.)
+            for (const auto& child : non_class_items) {
+                if (child->type == NodeType::Comment) {
+                    auto comment_node = std::dynamic_pointer_cast<CommentNode>(child);
+                    if (comment_node && !comment_node->comment_text.empty()) {
+                        std::string comment = comment_node->comment_text;
+                        if (!comment.empty() && comment[0] == '#') {
+                            comment = comment.substr(1);
+                        }
+                        size_t first = comment.find_first_not_of(" \t");
+                        if (first != std::string::npos) {
+                            comment = comment.substr(first);
+                        }
+                        generator.write_line("// " + comment);
+                    }
+                }
+            }
+
+            // Write class declaration
+            std::string class_decl;
+            if (!class_name.empty()) {
+                class_decl = "class " + class_name;
+            } else {
+                class_decl = "class";
+            }
+
+            if (!extends_type.empty()) {
+                class_decl += " extends " + extends_type;
+                track_type_usage(extends_type);
+            }
+
+            generator.write_block_start(class_decl);
+
+            // Output class members
+            for (const auto& child : class_members) {
+                switch (child->type) {
+                    case NodeType::VariableDeclaration:
+                        transform_variable_declaration(child);
+                        break;
+                    case NodeType::ConstDeclaration:
+                        transform_const_declaration(child);
+                        break;
+                    case NodeType::SignalDeclaration:
+                        transform_signal_declaration(child);
+                        break;
+                    case NodeType::EnumDeclaration:
+                        transform_enum_declaration(child);
+                        break;
+                    case NodeType::FunctionDeclaration:
+                        transform_function_declaration(child);
+                        break;
+                    default:
+                        break;
+                }
+            }
+
+            generator.write_block_end();
+            generator.new_line();
+        } else {
+            // No class wrapping needed - output everything as is
+            for (const auto& child : ast->children) {
+                if (!child) continue;
+
+                switch (child->type) {
+                    case NodeType::ClassDeclaration:
+                        transform_class_declaration(child);
+                        break;
+                    case NodeType::FunctionDeclaration:
+                        transform_function_declaration(child);
+                        break;
+                    case NodeType::VariableDeclaration:
+                        transform_variable_declaration(child);
+                        break;
+                    case NodeType::ConstDeclaration:
+                        transform_const_declaration(child);
+                        break;
+                    case NodeType::SignalDeclaration:
+                        transform_signal_declaration(child);
+                        break;
+                    case NodeType::EnumDeclaration:
+                        transform_enum_declaration(child);
+                        break;
+                    case NodeType::Comment:
+                        {
+                            auto comment_node = std::dynamic_pointer_cast<CommentNode>(child);
+                            if (comment_node && !comment_node->comment_text.empty()) {
+                                std::string comment = comment_node->comment_text;
+                                if (!comment.empty() && comment[0] == '#') {
+                                    comment = comment.substr(1);
+                                }
+                                size_t first = comment.find_first_not_of(" \t");
+                                if (first != std::string::npos) {
+                                    comment = comment.substr(first);
+                                }
+                                generator.write_line("// " + comment);
+                            }
+                        }
+                        break;
+                    default:
+                        break;
+                }
             }
         }
     } else if (ast->type == NodeType::ClassDeclaration) {
@@ -60,8 +167,8 @@ std::string ASTTransformer::transform(const ASTNodePtr& ast) {
         std::stringstream import_stream;
         // Add Godot type imports if needed
         if (!godot_types_used.empty()) {
-            import_stream << "// Import Godot types\n";
-            import_stream << "// import { ";
+            import_stream << "// Import Godot types (uncomment when ready to use)\n";
+            import_stream << "import { ";
             bool first = true;
             for (const auto& type : godot_types_used) {
                 if (!first) import_stream << ", ";
@@ -146,7 +253,22 @@ void ASTTransformer::transform_class_declaration(const ASTNodePtr& node) {
                 transform_class_declaration(child);
                 break;
             case NodeType::Comment:
-                generator.write_line("// " + child->text);
+                {
+                    auto comment_node = std::dynamic_pointer_cast<CommentNode>(child);
+                    if (comment_node && !comment_node->comment_text.empty()) {
+                        std::string comment = comment_node->comment_text;
+                        // Remove leading # if present
+                        if (!comment.empty() && comment[0] == '#') {
+                            comment = comment.substr(1);
+                        }
+                        // Trim leading whitespace
+                        size_t first = comment.find_first_not_of(" \t");
+                        if (first != std::string::npos) {
+                            comment = comment.substr(first);
+                        }
+                        generator.write_line("// " + comment);
+                    }
+                }
                 break;
             case NodeType::ExtendsStatement:
             case NodeType::ClassNameStatement:
@@ -349,7 +471,22 @@ void ASTTransformer::transform_statement(const ASTNodePtr& node) {
             generator.write_line("// pass");
             break;
         case NodeType::Comment:
-            generator.write_line("// " + node->text);
+            {
+                auto comment_node = std::dynamic_pointer_cast<CommentNode>(node);
+                if (comment_node && !comment_node->comment_text.empty()) {
+                    std::string comment = comment_node->comment_text;
+                    // Remove leading # if present
+                    if (!comment.empty() && comment[0] == '#') {
+                        comment = comment.substr(1);
+                    }
+                    // Trim leading whitespace
+                    size_t first = comment.find_first_not_of(" \t");
+                    if (first != std::string::npos) {
+                        comment = comment.substr(first);
+                    }
+                    generator.write_line("// " + comment);
+                }
+            }
             break;
         default:
             // Try to transform as expression statement
