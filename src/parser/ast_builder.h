@@ -32,6 +32,8 @@ private:
 
     // Statement builders
     ASTNodePtr build_if_statement(TSNode node);
+    ASTNodePtr build_elif_clause(TSNode node);
+    ASTNodePtr build_else_clause(TSNode node);
     ASTNodePtr build_for_statement(TSNode node);
     ASTNodePtr build_while_statement(TSNode node);
     ASTNodePtr build_match_statement(TSNode node);

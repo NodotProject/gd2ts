@@ -11,10 +11,10 @@ config_version=5
 [application]
 
 config/name="gd2ts Test Project"
-run/main_scene="uid://cl85a3lu077bq"
+run/main_scene="uid://bu240g8swqdyj"
 config/features=PackedStringArray("4.5")
 config/icon="uid://deyyoywxlgjpw"
 
 [editor_plugins]
 
-enabled=PackedStringArray("res://addons/gd2ts/plugin.cfg")
+enabled=PackedStringArray("res://addons/gut/plugin.cfg")

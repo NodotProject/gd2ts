@@ -46,6 +46,9 @@ void ASTBuilder::initialize_node_type_map() {
     node_type_map["array"] = NodeType::ArrayLiteral;
     node_type_map["dictionary"] = NodeType::DictionaryLiteral;
     node_type_map["comment"] = NodeType::Comment;
+    node_type_map["break_statement"] = NodeType::BreakStatement;
+    node_type_map["continue_statement"] = NodeType::ContinueStatement;
+    node_type_map["pass_statement"] = NodeType::PassStatement;
 }
 
 std::string ASTBuilder::get_node_text(TSNode node) const {
@@ -169,6 +172,12 @@ ASTNodePtr ASTBuilder::build_node(TSNode node) {
     else if (type == "if_statement") {
         return build_if_statement(node);
     }
+    else if (type == "elif_clause") {
+        return build_elif_clause(node);
+    }
+    else if (type == "else_clause") {
+        return build_else_clause(node);
+    }
     else if (type == "for_statement") {
         return build_for_statement(node);
     }
@@ -186,6 +195,24 @@ ASTNodePtr ASTBuilder::build_node(TSNode node) {
     }
     else if (type == "assignment" || type == "augmented_assignment") {
         return build_assignment(node);
+    }
+    else if (type == "break_statement") {
+        auto break_node = std::make_shared<ASTNode>(NodeType::BreakStatement);
+        break_node->node_type_str = type;
+        break_node->location = SourceLocation(node);
+        return break_node;
+    }
+    else if (type == "continue_statement") {
+        auto continue_node = std::make_shared<ASTNode>(NodeType::ContinueStatement);
+        continue_node->node_type_str = type;
+        continue_node->location = SourceLocation(node);
+        return continue_node;
+    }
+    else if (type == "pass_statement") {
+        auto pass_node = std::make_shared<ASTNode>(NodeType::PassStatement);
+        pass_node->node_type_str = type;
+        pass_node->location = SourceLocation(node);
+        return pass_node;
     }
     else if (type == "comment") {
         auto comment_node = std::make_shared<CommentNode>();
@@ -549,6 +576,38 @@ ASTNodePtr ASTBuilder::build_if_statement(TSNode node) {
     return if_stmt;
 }
 
+ASTNodePtr ASTBuilder::build_elif_clause(TSNode node) {
+    // elif_clause has condition and body fields
+    auto elif_node = std::make_shared<ASTNode>(NodeType::Source);  // Use generic node for body
+    elif_node->node_type_str = "elif_clause";
+    elif_node->location = SourceLocation(node);
+
+    // Get condition
+    TSNode cond_node = get_child_by_field(node, "condition");
+    if (!node_is_null(cond_node)) {
+        auto cond = build_expression(cond_node);
+        if (cond) elif_node->add_child(cond);
+    }
+
+    // Get body
+    TSNode body_node = get_child_by_field(node, "body");
+    if (!node_is_null(body_node)) {
+        auto body = build_node(body_node);
+        if (body) elif_node->add_child(body);
+    }
+
+    return elif_node;
+}
+
+ASTNodePtr ASTBuilder::build_else_clause(TSNode node) {
+    // else_clause only has a body field
+    TSNode body_node = get_child_by_field(node, "body");
+    if (!node_is_null(body_node)) {
+        return build_node(body_node);
+    }
+    return nullptr;
+}
+
 ASTNodePtr ASTBuilder::build_for_statement(TSNode node) {
     auto for_stmt = std::make_shared<ForStmt>();
     for_stmt->node_type_str = "for_statement";
@@ -669,9 +728,32 @@ ASTNodePtr ASTBuilder::build_expression_statement(TSNode node) {
 }
 
 ASTNodePtr ASTBuilder::build_assignment(TSNode node) {
-    auto assign = std::make_shared<ASTNode>(NodeType::Assignment);
-    assign->node_type_str = get_node_type(node);
+    std::string node_type_str = get_node_type(node);
+
+    // Determine if this is a regular assignment or augmented assignment
+    NodeType type = (node_type_str == "augmented_assignment") ?
+                    NodeType::AugmentedAssignment : NodeType::Assignment;
+
+    auto assign = std::make_shared<ASTNode>(type);
+    assign->node_type_str = node_type_str;
     assign->location = SourceLocation(node);
+
+    // For augmented assignment, extract the operator
+    if (type == NodeType::AugmentedAssignment) {
+        // Get the operator (e.g., "+=", "-=", "*=", etc.)
+        uint32_t count = ts_node_child_count(node);
+        for (uint32_t i = 0; i < count; i++) {
+            TSNode child = ts_node_child(node, i);
+            if (!node_is_named(child)) {
+                std::string op = get_node_text(child);
+                // Check if this is an assignment operator
+                if (op.length() >= 2 && op[op.length() - 1] == '=') {
+                    assign->text = op;
+                    break;
+                }
+            }
+        }
+    }
 
     // Get left and right
     TSNode left_node = get_child_by_field(node, "left");

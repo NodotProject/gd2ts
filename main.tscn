@@ -1,0 +1,99 @@
+[gd_scene load_steps=2 format=3 uid="uid://bu240g8swqdyj"]
+
+[sub_resource type="GDScript" id="GDScript_7dm0k"]
+script/source = "extends Button
+
+@onready var text_edit: TextEdit = $\"../../HBoxContainer/Panel/VBoxContainer/TextEdit\"
+@onready var text_edit2: TextEdit = $\"../../HBoxContainer/Panel2/VBoxContainer/TextEdit\"
+
+
+var gd2ts := GD2TSConverter.new()
+
+func _ready() -> void:
+	pressed.connect(func ():
+		var typescript = gd2ts.transpile_string(text_edit.text)
+		text_edit2.text = typescript
+	)
+"
+
+[node name="Main" type="Node2D"]
+
+[node name="CanvasGroup" type="CanvasGroup" parent="."]
+
+[node name="VBoxContainer" type="VBoxContainer" parent="CanvasGroup"]
+custom_minimum_size = Vector2(1152, 648)
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_right = 1152.0
+offset_bottom = 648.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="Control" type="Control" parent="CanvasGroup/VBoxContainer"]
+custom_minimum_size = Vector2(0, 32.135)
+layout_mode = 2
+
+[node name="Button" type="Button" parent="CanvasGroup/VBoxContainer/Control"]
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -35.0
+offset_top = -15.5
+offset_right = 35.0
+offset_bottom = 15.5
+grow_horizontal = 2
+grow_vertical = 2
+text = "Convert"
+script = SubResource("GDScript_7dm0k")
+
+[node name="HBoxContainer" type="HBoxContainer" parent="CanvasGroup/VBoxContainer"]
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="Panel" type="Panel" parent="CanvasGroup/VBoxContainer/HBoxContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="VBoxContainer" type="VBoxContainer" parent="CanvasGroup/VBoxContainer/HBoxContainer/Panel"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="Label" type="Label" parent="CanvasGroup/VBoxContainer/HBoxContainer/Panel/VBoxContainer"]
+layout_mode = 2
+text = "GDScript"
+horizontal_alignment = 1
+
+[node name="TextEdit" type="TextEdit" parent="CanvasGroup/VBoxContainer/HBoxContainer/Panel/VBoxContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+
+[node name="Panel2" type="Panel" parent="CanvasGroup/VBoxContainer/HBoxContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="VBoxContainer" type="VBoxContainer" parent="CanvasGroup/VBoxContainer/HBoxContainer/Panel2"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="Label" type="Label" parent="CanvasGroup/VBoxContainer/HBoxContainer/Panel2/VBoxContainer"]
+layout_mode = 2
+text = "Typescript"
+horizontal_alignment = 1
+
+[node name="TextEdit" type="TextEdit" parent="CanvasGroup/VBoxContainer/HBoxContainer/Panel2/VBoxContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3

@@ -22,6 +22,7 @@ private:
     void transform_class_declaration(const ASTNodePtr& node);
     void transform_function_declaration(const ASTNodePtr& node);
     void transform_variable_declaration(const ASTNodePtr& node);
+    void transform_local_variable_declaration(const ASTNodePtr& node);
     void transform_const_declaration(const ASTNodePtr& node);
     void transform_signal_declaration(const ASTNodePtr& node);
     void transform_enum_declaration(const ASTNodePtr& node);

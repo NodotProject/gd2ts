@@ -355,6 +355,34 @@ void ASTTransformer::transform_variable_declaration(const ASTNodePtr& node) {
     generator.write_statement(var_decl);
 }
 
+void ASTTransformer::transform_local_variable_declaration(const ASTNodePtr& node) {
+    if (!node) return;
+
+    auto var_node = std::dynamic_pointer_cast<VariableDecl>(node);
+    if (!var_node) return;
+
+    // For local variables, use let keyword by default
+    // TODO: Could analyze for reassignment to optimize const usage
+    std::string var_decl = "let " + var_node->var_name;
+
+    // Add type annotation
+    if (!var_node->var_type.empty()) {
+        std::string ts_type = type_mapper.map_type(var_node->var_type);
+        var_decl += ": " + ts_type;
+        track_type_usage(ts_type);
+    }
+
+    // Add initializer
+    if (var_node->initializer) {
+        var_decl += " = " + transform_expression(var_node->initializer);
+    } else if (var_node->var_type.empty()) {
+        // No type and no initializer - still need let/const
+        var_decl = "let " + var_node->var_name + ": any";
+    }
+
+    generator.write_statement(var_decl);
+}
+
 void ASTTransformer::transform_const_declaration(const ASTNodePtr& node) {
     if (!node) return;
 
@@ -439,6 +467,12 @@ void ASTTransformer::transform_statement(const ASTNodePtr& node) {
     if (!node) return;
 
     switch (node->type) {
+        case NodeType::VariableDeclaration:
+            transform_local_variable_declaration(node);
+            break;
+        case NodeType::ConstDeclaration:
+            transform_const_declaration(node);
+            break;
         case NodeType::IfStatement:
             transform_if_statement(node);
             break;
@@ -760,8 +794,15 @@ void ASTTransformer::transform_expression_statement(const ASTNodePtr& node) {
     if (!node) return;
 
     if (node->has_children() && node->children[0]) {
-        std::string expr = transform_expression(node->children[0]);
-        generator.write_statement(expr);
+        auto child = node->children[0];
+
+        // Check if the expression is actually an assignment (which is statement in our AST)
+        if (child->type == NodeType::Assignment || child->type == NodeType::AugmentedAssignment) {
+            transform_assignment(child);
+        } else {
+            std::string expr = transform_expression(child);
+            generator.write_statement(expr);
+        }
     }
 }
 
