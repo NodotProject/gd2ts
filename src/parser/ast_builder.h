@@ -53,6 +53,7 @@ private:
     ASTNodePtr build_array_literal(TSNode node);
     ASTNodePtr build_dictionary_literal(TSNode node);
     ASTNodePtr build_get_node(TSNode node);
+    ASTNodePtr build_await_expression(TSNode node);
 
     // Type and parameter builders
     ASTNodePtr build_type(TSNode node);

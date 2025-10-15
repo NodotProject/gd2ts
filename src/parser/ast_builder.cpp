@@ -811,6 +811,9 @@ ASTNodePtr ASTBuilder::build_expression(TSNode node) {
     else if (type == "get_node") {
         return build_get_node(node);
     }
+    else if (type == "await_expression") {
+        return build_await_expression(node);
+    }
     else {
         // Generic expression node
         auto expr = std::make_shared<ASTNode>(NodeType::Unknown);
@@ -1027,6 +1030,27 @@ ASTNodePtr ASTBuilder::build_get_node(TSNode node) {
     get_node_expr->location = SourceLocation(node);
     get_node_expr->text = get_node_text(node);
     return get_node_expr;
+}
+
+ASTNodePtr ASTBuilder::build_await_expression(TSNode node) {
+    auto await_expr = std::make_shared<ASTNode>(NodeType::AwaitExpression);
+    await_expr->node_type_str = "await_expression";
+    await_expr->location = SourceLocation(node);
+    await_expr->text = get_node_text(node);
+
+    // Get the expression being awaited
+    uint32_t count = ts_node_child_count(node);
+    for (uint32_t i = 0; i < count; i++) {
+        TSNode child = ts_node_child(node, i);
+        if (node_is_named(child)) {
+            auto child_expr = build_expression(child);
+            if (child_expr) {
+                await_expr->add_child(child_expr);
+            }
+        }
+    }
+
+    return await_expr;
 }
 
 std::vector<std::string> ASTBuilder::extract_annotations(TSNode node) {

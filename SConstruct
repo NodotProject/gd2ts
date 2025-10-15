@@ -120,7 +120,7 @@ sources += [
 ]
 
 # Build the library
-library_path = "{}/{}".format(env["target_path"], env["platform"])
+library_path = env["target_path"]
 os.makedirs(library_path, exist_ok=True)
 
 library_name = "{}.{}.{}.{}".format(

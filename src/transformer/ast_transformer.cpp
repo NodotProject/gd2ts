@@ -1,6 +1,7 @@
 #include "ast_transformer.h"
 #include <sstream>
 #include <algorithm>
+#include <iostream>
 
 namespace gd2ts {
 
@@ -167,7 +168,6 @@ std::string ASTTransformer::transform(const ASTNodePtr& ast) {
         std::stringstream import_stream;
         // Add Godot type imports if needed
         if (!godot_types_used.empty()) {
-            import_stream << "// Import Godot types (uncomment when ready to use)\n";
             import_stream << "import { ";
             bool first = true;
             for (const auto& type : godot_types_used) {
@@ -294,19 +294,40 @@ void ASTTransformer::transform_function_declaration(const ASTNodePtr& node) {
 
     // Write function signature
     std::string func_decl;
-    if (needs_async) {
-        func_decl = "async " + func_node->function_name;
-    } else {
-        func_decl = func_node->function_name;
+
+    // Add static keyword if needed
+    if (func_node->is_static) {
+        func_decl = "static ";
     }
+
+    // Add async keyword if needed
+    if (needs_async) {
+        func_decl += "async ";
+    }
+
+    func_decl += func_node->function_name;
     func_decl += "(" + get_function_parameters(func_node->parameters) + ")";
 
+    // Handle return type with Promise wrapping for async functions
     if (!func_node->return_type.empty()) {
         std::string ts_return_type = type_mapper.map_type(func_node->return_type);
-        func_decl += ": " + ts_return_type;
+
+        if (needs_async) {
+            // Async functions must return Promise<T>
+            func_decl += ": Promise<" + ts_return_type + ">";
+            track_type_usage("Promise");
+        } else {
+            func_decl += ": " + ts_return_type;
+        }
         track_type_usage(ts_return_type);
     } else {
-        func_decl += ": void";
+        // No explicit return type specified
+        if (needs_async) {
+            func_decl += ": Promise<void>";
+            track_type_usage("Promise");
+        } else {
+            func_decl += ": void";
+        }
     }
 
     generator.write_block_start(func_decl);
@@ -1354,7 +1375,115 @@ bool ASTTransformer::contains_await(const ASTNodePtr& node) {
         return true;
     }
 
-    // Recursively check all children
+    // Check specific node type fields that may contain await expressions
+    // These fields are not in the children vector but are separate member variables
+
+    // Check variable declaration initializer
+    auto var_node = std::dynamic_pointer_cast<VariableDecl>(node);
+    if (var_node && var_node->initializer) {
+        if (contains_await(var_node->initializer)) {
+            return true;
+        }
+    }
+
+    // Check const declaration value
+    auto const_node = std::dynamic_pointer_cast<ConstDecl>(node);
+    if (const_node && const_node->value) {
+        if (contains_await(const_node->value)) {
+            return true;
+        }
+    }
+
+    // Check binary expression operands
+    auto binary_node = std::dynamic_pointer_cast<BinaryExpr>(node);
+    if (binary_node) {
+        if (contains_await(binary_node->left) || contains_await(binary_node->right)) {
+            return true;
+        }
+    }
+
+    // Check unary expression operand
+    auto unary_node = std::dynamic_pointer_cast<UnaryExpr>(node);
+    if (unary_node && unary_node->operand) {
+        if (contains_await(unary_node->operand)) {
+            return true;
+        }
+    }
+
+    // Check call expression callee and arguments
+    auto call_node = std::dynamic_pointer_cast<CallExpr>(node);
+    if (call_node) {
+        if (contains_await(call_node->callee)) {
+            return true;
+        }
+        for (const auto& arg : call_node->arguments) {
+            if (contains_await(arg)) {
+                return true;
+            }
+        }
+    }
+
+    // Check if statement condition and bodies
+    auto if_node = std::dynamic_pointer_cast<IfStmt>(node);
+    if (if_node) {
+        if (contains_await(if_node->condition) ||
+            contains_await(if_node->then_body) ||
+            contains_await(if_node->else_body)) {
+            return true;
+        }
+        for (const auto& elif : if_node->elif_clauses) {
+            if (contains_await(elif)) {
+                return true;
+            }
+        }
+    }
+
+    // Check for statement iterable and body
+    auto for_node = std::dynamic_pointer_cast<ForStmt>(node);
+    if (for_node) {
+        if (contains_await(for_node->iterable) || contains_await(for_node->body)) {
+            return true;
+        }
+    }
+
+    // Check while statement condition and body
+    auto while_node = std::dynamic_pointer_cast<WhileStmt>(node);
+    if (while_node) {
+        if (contains_await(while_node->condition) || contains_await(while_node->body)) {
+            return true;
+        }
+    }
+
+    // Check return statement value
+    auto return_node = std::dynamic_pointer_cast<ReturnStmt>(node);
+    if (return_node && return_node->value) {
+        if (contains_await(return_node->value)) {
+            return true;
+        }
+    }
+
+    // Check match statement value and pattern sections
+    auto match_node = std::dynamic_pointer_cast<MatchStmt>(node);
+    if (match_node) {
+        if (contains_await(match_node->value)) {
+            return true;
+        }
+        for (const auto& pattern : match_node->pattern_sections) {
+            if (contains_await(pattern)) {
+                return true;
+            }
+        }
+    }
+
+    // Check parameter default value
+    auto param_node = std::dynamic_pointer_cast<Parameter>(node);
+    if (param_node && param_node->default_value) {
+        if (contains_await(param_node->default_value)) {
+            return true;
+        }
+    }
+
+    // Recursively check all children (for generic nodes and body nodes)
     if (node->has_children()) {
         for (const auto& child : node->children) {
             if (contains_await(child)) {
