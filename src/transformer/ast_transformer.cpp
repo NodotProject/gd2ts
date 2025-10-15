@@ -289,8 +289,16 @@ void ASTTransformer::transform_function_declaration(const ASTNodePtr& node) {
     auto func_node = std::dynamic_pointer_cast<FunctionDecl>(node);
     if (!func_node) return;
 
+    // Check if function body contains await expressions
+    bool needs_async = func_node->body && contains_await(func_node->body);
+
     // Write function signature
-    std::string func_decl = func_node->function_name;
+    std::string func_decl;
+    if (needs_async) {
+        func_decl = "async " + func_node->function_name;
+    } else {
+        func_decl = func_node->function_name;
+    }
     func_decl += "(" + get_function_parameters(func_node->parameters) + ")";
 
     if (!func_node->return_type.empty()) {
@@ -1336,6 +1344,26 @@ std::string ASTTransformer::transform_conditional_expression(const ASTNodePtr& n
     std::string false_expr = transform_expression(node->children[2]);
 
     return condition + " ? " + true_expr + " : " + false_expr;
+}
+
+bool ASTTransformer::contains_await(const ASTNodePtr& node) {
+    if (!node) return false;
+
+    // Check if this node is an await expression
+    if (node->type == NodeType::AwaitExpression) {
+        return true;
+    }
+
+    // Recursively check all children
+    if (node->has_children()) {
+        for (const auto& child : node->children) {
+            if (contains_await(child)) {
+                return true;
+            }
+        }
+    }
+
+    return false;
 }
 
 void ASTTransformer::set_indent_style(const std::string& style) {

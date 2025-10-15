@@ -59,6 +59,7 @@ private:
     std::string map_operator(const std::string& op);
     void track_type_usage(const std::string& type);
     void generate_imports();
+    bool contains_await(const ASTNodePtr& node);
 
     // Special keyword handling
     std::string replace_keywords(const std::string& text);
